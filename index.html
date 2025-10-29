@@ -9,7 +9,26 @@
             font-family: Arial, sans-serif;
             margin: 20px;
         }
+        #main-container {
+            display: flex;
+            gap: 20px;
+        }
+        #video-section {
+            flex: 0 0 auto;
+            max-width: 640px;
+        }
+        #timestamp-section {
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+        }
         #file-loader {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        #timestamp-file-selector {
             background-color: #eee;
             padding: 10px;
             border-radius: 5px;
@@ -20,9 +39,12 @@
             padding: 15px;
             background-color: #f5f5f5;
             border-radius: 5px;
+        }
+        .control-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 10px;
         }
         .threshold-control {
             margin-bottom: 15px;
@@ -35,16 +57,32 @@
             margin-bottom: 20px;
         }
         #timestamp-list {
-            margin-top: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #timestampsContainer {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #fafafa;
+            max-height: 600px;
         }
         .timestamp {
             margin-bottom: 5px;
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 2px 5px;
+            padding: 5px;
             border-radius: 3px;
             transition: background-color 0.3s;
+            border: 1px solid transparent;
+        }
+        .timestamp:hover {
+            border-color: #ddd;
         }
         .clickable-time {
             cursor: pointer;
@@ -58,7 +96,7 @@
             color: #666;
             font-size: 0.9em;
         }
-        #downloadButton {
+        #downloadButton, #loadButton {
             padding: 10px 15px;
             background-color: #007bff;
             color: white;
@@ -67,58 +105,117 @@
             cursor: pointer;
             font-size: 16px;
         }
-        #downloadButton:hover {
+        #downloadButton:hover, #loadButton:hover {
             background-color: #0056b3;
+        }
+        #loadButton {
+            background-color: #28a745;
+        }
+        #loadButton:hover {
+            background-color: #218838;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        label {
+            font-weight: 600;
+        }
+        select, input[type="file"] {
+            padding: 5px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
         }
     </style>
 </head>
 <body>
     <h1>Video Player with Confidence Threshold</h1>
 
-    <div id="file-loader">
-        <label for="videoFile">Select a video file:</label>
-        <input type="file" id="videoFile" accept="video/mp4,video/webm,video/ogg">
-    </div>
+    <div id="main-container">
+        <!-- Left side: Video section -->
+        <div id="video-section">
+            <div id="timestamp-file-selector">
+                <label for="timestampFileSelect">Select timestamp file:</label>
+                <select id="timestampFileSelect" onchange="loadTimestamps()">
+                    <option value="timestamps_game_1.txt">timestamps_game_1.txt</option>
+                    <option value="timestamps_game_2.txt">timestamps_game_2.txt</option>
+                </select>
+            </div>
 
-    <video id="videoPlayer" width="640" controls>
-        Your browser does not support the video tag.
-    </video>
+            <div id="file-loader">
+                <label for="videoFile">Select a video file:</label>
+                <input type="file" id="videoFile" accept="video/mp4,video/webm,video/ogg">
+            </div>
 
-    <div id="controls">
-        <div class="threshold-control">
-            <label for="confidenceThreshold">Confidence Threshold:</label>
-            <input type="range" id="confidenceThreshold" min="0" max="100" value="50" step="1">
-            <span id="confidence-value">0.50</span>
+            <video id="videoPlayer" width="640" controls>
+                Your browser does not support the video tag.
+            </video>
+
+            <div id="controls">
+                <div class="threshold-control">
+                    <label for="confidenceThreshold">Confidence Threshold:</label>
+                    <input type="range" id="confidenceThreshold" min="0" max="100" value="50" step="1">
+                    <span id="confidence-value">0.50</span>
+                </div>
+                <div class="control-row">
+                    <div class="button-group">
+                        <button id="downloadButton">Download Saved Actions</button>
+                        <input type="file" id="loadFilteredFile" accept=".txt" style="display: none;">
+                        <button id="loadButton">Load Filtered Actions</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="dropdown">
+                <label for="classSelector">Choose a class of events:</label>
+                <select id="classSelector" onchange="showTimestamps()">
+                    <option value="">-- Select a class --</option>
+                </select>
+            </div>
         </div>
-        <button id="downloadButton">Download Saved Actions</button>
-    </div>
 
-    <div id="dropdown">
-        <label for="classSelector">Choose a class of events:</label>
-        <select id="classSelector" onchange="showTimestamps()">
-            <option value="">-- Select a class --</option>
-        </select>
-    </div>
-
-    <div id="timestamp-list">
-        <h3>Timestamps (Click time to seek)</h3>
-        <div id="timestampsContainer"></div>
+        <!-- Right side: Timestamp list -->
+        <div id="timestamp-section">
+            <div id="timestamp-list">
+                <h3>Timestamps (Click time to seek)</h3>
+                <div id="timestampsContainer"></div>
+            </div>
+        </div>
     </div>
 
     <script>
         const classTimestamps = {};
         let savedActions = [];
 
+        // Convert seconds to h:mm:ss format
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+
         async function loadTimestamps() {
             try {
-                console.log("Attempting to load text file...");
-                // This still loads timestamps.txt from the same folder
-                const response = await fetch('timestamps.txt');
+                const selectedFile = document.getElementById('timestampFileSelect').value;
+                console.log("Attempting to load:", selectedFile);
+                
+                const response = await fetch(selectedFile);
                 if (!response.ok) {
                     throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
                 }
                 const text = await response.text();
                 console.log("Text file loaded successfully.");
+
+                // Clear existing data
+                Object.keys(classTimestamps).forEach(key => delete classTimestamps[key]);
+                const classSelector = document.getElementById('classSelector');
+                classSelector.innerHTML = '<option value="">-- Select a class --</option>';
 
                 const lines = text.split('\n').slice(1).map(line => line.trim()).filter(line => line);
                 
@@ -138,7 +235,6 @@
                     });
                 });
 
-                const classSelector = document.getElementById('classSelector');
                 Object.keys(classTimestamps).forEach(eventClass => {
                     const option = document.createElement('option');
                     option.value = eventClass;
@@ -174,11 +270,14 @@
                         checkbox.className = 'action-checkbox';
                         checkbox.dataset.originalLine = event.originalLine;
                         checkbox.checked = savedActions.includes(event.originalLine);
+                        if (checkbox.checked) {
+                            timestampDiv.style.backgroundColor = '#e0ffe0';
+                        }
                         checkbox.onchange = handleCheckboxChange;
 
                         const timeText = document.createElement('span');
                         timeText.className = 'clickable-time';
-                        timeText.textContent = `${timestamp} seconds`;
+                        timeText.textContent = formatTime(timestamp);
                         timeText.onclick = () => seekTo(timestamp);
 
                         const confidenceText = document.createElement('span');
@@ -223,12 +322,42 @@
             const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'saved_actions.txt';
+            
+            // Generate filename with timestamp
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            a.download = `checked_actions_${timestamp}.txt`;
+            
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
             console.log("File download triggered.");
+        }
+
+        function loadFilteredActions() {
+            const fileInput = document.getElementById('loadFilteredFile');
+            fileInput.click();
+        }
+
+        function handleFilteredFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const lines = content.split('\n').map(line => line.trim()).filter(line => line);
+                
+                savedActions = lines;
+                console.log(`Loaded ${savedActions.length} filtered actions`);
+                
+                // Refresh the display to show checkboxes
+                showTimestamps();
+                
+                alert(`Loaded ${savedActions.length} previously filtered actions`);
+            };
+            reader.readAsText(file);
         }
 
         function seekTo(seconds) {
@@ -244,9 +373,10 @@
         });
         
         document.getElementById('downloadButton').addEventListener('click', downloadSavedActions);
+        document.getElementById('loadButton').addEventListener('click', loadFilteredActions);
+        document.getElementById('loadFilteredFile').addEventListener('change', handleFilteredFileLoad);
 
-        // --- NEW ---
-        // ADDED: Event listener for the video file input
+        // Event listener for the video file input
         document.getElementById('videoFile').addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (file) {
@@ -266,9 +396,8 @@
                 console.log("New video file loaded.");
             }
         });
-        // --- END NEW ---
 
-        // This still runs on page load to get the timestamps
+        // Load timestamps on page load
         window.onload = loadTimestamps;
     </script>
 </body>
