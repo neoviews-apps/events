@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player with Confidence Threshold</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #file-loader {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        #controls {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .threshold-control {
+            margin-bottom: 15px;
+        }
+        #confidence-value {
+            margin-left: 10px;
+            font-weight: bold;
+        }
+        #dropdown {
+            margin-bottom: 20px;
+        }
+        #timestamp-list {
+            margin-top: 20px;
+        }
+        .timestamp {
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            transition: background-color 0.3s;
+        }
+        .clickable-time {
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+        }
+        .clickable-time:hover {
+            color: darkblue;
+        }
+        .confidence-indicator {
+            color: #666;
+            font-size: 0.9em;
+        }
+        #downloadButton {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #downloadButton:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Video Player with Confidence Threshold</h1>
+
+    <div id="file-loader">
+        <label for="videoFile">Select a video file:</label>
+        <input type="file" id="videoFile" accept="video/mp4,video/webm,video/ogg">
+    </div>
+
+    <video id="videoPlayer" width="640" controls>
+        Your browser does not support the video tag.
+    </video>
+
+    <div id="controls">
+        <div class="threshold-control">
+            <label for="confidenceThreshold">Confidence Threshold:</label>
+            <input type="range" id="confidenceThreshold" min="0" max="100" value="50" step="1">
+            <span id="confidence-value">0.50</span>
+        </div>
+        <button id="downloadButton">Download Saved Actions</button>
+    </div>
+
+    <div id="dropdown">
+        <label for="classSelector">Choose a class of events:</label>
+        <select id="classSelector" onchange="showTimestamps()">
+            <option value="">-- Select a class --</option>
+        </select>
+    </div>
+
+    <div id="timestamp-list">
+        <h3>Timestamps (Click time to seek)</h3>
+        <div id="timestampsContainer"></div>
+    </div>
+
+    <script>
+        const classTimestamps = {};
+        let savedActions = [];
+
+        async function loadTimestamps() {
+            try {
+                console.log("Attempting to load text file...");
+                // This still loads timestamps.txt from the same folder
+                const response = await fetch('timestamps.txt');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status} - ${response.statusText}`);
+                }
+                const text = await response.text();
+                console.log("Text file loaded successfully.");
+
+                const lines = text.split('\n').slice(1).map(line => line.trim()).filter(line => line);
+                
+                lines.forEach(line => {
+                    const [gameTime, eventClass, position, confidence, half] = line.split(',').map(entry => entry.trim());
+                    
+                    if (!eventClass) return;
+                    
+                    if (!classTimestamps[eventClass]) {
+                        classTimestamps[eventClass] = [];
+                    }
+                    
+                    classTimestamps[eventClass].push({
+                        timeInSeconds: Math.round(parseInt(position, 10) / 1000),
+                        confidence: parseFloat(confidence),
+                        originalLine: line
+                    });
+                });
+
+                const classSelector = document.getElementById('classSelector');
+                Object.keys(classTimestamps).forEach(eventClass => {
+                    const option = document.createElement('option');
+                    option.value = eventClass;
+                    option.textContent = eventClass;
+                    classSelector.appendChild(option);
+                });
+                
+                showTimestamps();
+            } catch (error) {
+                console.error('Error loading timestamps:', error);
+                alert('Failed to load timestamps. Check the console for details.');
+            }
+        }
+
+        function showTimestamps() {
+            const selectedClass = document.getElementById('classSelector').value;
+            const timestampsContainer = document.getElementById('timestampsContainer');
+            const threshold = parseFloat(document.getElementById('confidenceThreshold').value) / 100;
+            
+            timestampsContainer.innerHTML = ''; 
+
+            if (selectedClass && classTimestamps[selectedClass]) {
+                classTimestamps[selectedClass].forEach((event, index) => {
+                    const confidence = event.confidence;
+                    const timestamp = event.timeInSeconds;
+                    
+                    if (confidence >= threshold) {
+                        const timestampDiv = document.createElement('div');
+                        timestampDiv.className = 'timestamp';
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'action-checkbox';
+                        checkbox.dataset.originalLine = event.originalLine;
+                        checkbox.checked = savedActions.includes(event.originalLine);
+                        checkbox.onchange = handleCheckboxChange;
+
+                        const timeText = document.createElement('span');
+                        timeText.className = 'clickable-time';
+                        timeText.textContent = `${timestamp} seconds`;
+                        timeText.onclick = () => seekTo(timestamp);
+
+                        const confidenceText = document.createElement('span');
+                        confidenceText.className = 'confidence-indicator';
+                        confidenceText.textContent = `(confidence: ${(confidence * 100).toFixed(1)}%)`;
+                        
+                        timestampDiv.appendChild(checkbox);
+                        timestampDiv.appendChild(timeText);
+                        timestampDiv.appendChild(confidenceText);
+                        
+                        timestampsContainer.appendChild(timestampDiv);
+                    }
+                });
+            }
+        }
+
+        function handleCheckboxChange(event) {
+            const checkbox = event.target;
+            const timestampDiv = checkbox.parentElement;
+            const lineToSave = checkbox.dataset.originalLine;
+
+            if (checkbox.checked) {
+                if (!savedActions.includes(lineToSave)) {
+                    savedActions.push(lineToSave);
+                }
+                timestampDiv.style.backgroundColor = '#e0ffe0';
+                console.log("Added. Total saved:", savedActions.length);
+            } else {
+                savedActions = savedActions.filter(line => line !== lineToSave);
+                timestampDiv.style.backgroundColor = 'transparent';
+                console.log("Removed. Total saved:", savedActions.length);
+            }
+        }
+
+        function downloadSavedActions() {
+            if (savedActions.length === 0) {
+                alert("No actions have been saved. Please check some boxes first.");
+                return;
+            }
+
+            const fileContent = savedActions.join('\n');
+            const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'saved_actions.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            console.log("File download triggered.");
+        }
+
+        function seekTo(seconds) {
+            const video = document.getElementById('videoPlayer');
+            video.currentTime = seconds;
+            video.play();
+        }
+
+        document.getElementById('confidenceThreshold').addEventListener('input', function(e) {
+            const value = (e.target.value / 100).toFixed(2);
+            document.getElementById('confidence-value').textContent = value;
+            showTimestamps();
+        });
+        
+        document.getElementById('downloadButton').addEventListener('click', downloadSavedActions);
+
+        // --- NEW ---
+        // ADDED: Event listener for the video file input
+        document.getElementById('videoFile').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const videoPlayer = document.getElementById('videoPlayer');
+                
+                // If there's an old video, revoke its URL to free up memory
+                if (videoPlayer.currentSrc && videoPlayer.currentSrc.startsWith('blob:')) {
+                    URL.revokeObjectURL(videoPlayer.currentSrc);
+                }
+                
+                // Create a URL for the new local file
+                const videoURL = URL.createObjectURL(file);
+                
+                // Set the video source and load it
+                videoPlayer.src = videoURL;
+                videoPlayer.load();
+                console.log("New video file loaded.");
+            }
+        });
+        // --- END NEW ---
+
+        // This still runs on page load to get the timestamps
+        window.onload = loadTimestamps;
+    </script>
+</body>
+</html>
