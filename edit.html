@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video action viewer</title>
+    <title>Video Player with Confidence Threshold</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -40,6 +40,19 @@
             background-color: #f5f5f5;
             border-radius: 5px;
         }
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .threshold-control {
+            margin-bottom: 15px;
+        }
+        #confidence-value {
+            margin-left: 10px;
+            font-weight: bold;
+        }
         #dropdown {
             margin-bottom: 20px;
         }
@@ -70,7 +83,6 @@
         }
         .timestamp:hover {
             border-color: #ddd;
-            background-color: #f0f0f0;
         }
         .clickable-time {
             cursor: pointer;
@@ -79,6 +91,32 @@
         }
         .clickable-time:hover {
             color: darkblue;
+        }
+        .confidence-indicator {
+            color: #666;
+            font-size: 0.9em;
+        }
+        #downloadButton, #loadButton {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #downloadButton:hover, #loadButton:hover {
+            background-color: #0056b3;
+        }
+        #loadButton {
+            background-color: #28a745;
+        }
+        #loadButton:hover {
+            background-color: #218838;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
         }
         label {
             font-weight: 600;
@@ -91,7 +129,7 @@
     </style>
 </head>
 <body>
-    <h1>Video action viewer</h1>
+    <h1>Video Player with Confidence Threshold</h1>
 
     <div id="main-container">
         <!-- Left side: Video section -->
@@ -99,8 +137,8 @@
             <div id="timestamp-file-selector">
                 <label for="timestampFileSelect">Select timestamp file:</label>
                 <select id="timestampFileSelect" onchange="loadTimestamps()">
-                    <option value="game_1_actions.txt">Game 1</option>
-                    <option value="game_2_actions.txt">Game 2</option>
+                    <option value="timestamps_game_1.txt">timestamps_game_1.txt</option>
+                    <option value="timestamps_game_2.txt">timestamps_game_2.txt</option>
                 </select>
             </div>
 
@@ -112,18 +150,32 @@
             <video id="videoPlayer" width="640" controls>
                 Your browser does not support the video tag.
             </video>
-        </div>
 
-        <!-- Right side: Timestamp list -->
-        <div id="timestamp-section">
+            <div id="controls">
+                <div class="threshold-control">
+                    <label for="confidenceThreshold">Confidence Threshold:</label>
+                    <input type="range" id="confidenceThreshold" min="0" max="100" value="50" step="1">
+                    <span id="confidence-value">0.50</span>
+                </div>
+                <div class="control-row">
+                    <div class="button-group">
+                        <button id="downloadButton">Download Saved Actions</button>
+                        <input type="file" id="loadFilteredFile" accept=".txt" style="display: none;">
+                        <button id="loadButton">Load Filtered Actions</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="dropdown">
                 <label for="classSelector">Choose a class of events:</label>
                 <select id="classSelector" onchange="showTimestamps()">
                     <option value="">-- Select a class --</option>
-                    <option value="__all__">All Actions</option>
                 </select>
             </div>
-            
+        </div>
+
+        <!-- Right side: Timestamp list -->
+        <div id="timestamp-section">
             <div id="timestamp-list">
                 <h3>Timestamps (Click time to seek)</h3>
                 <div id="timestampsContainer"></div>
@@ -133,6 +185,7 @@
 
     <script>
         const classTimestamps = {};
+        let savedActions = [];
 
         // Convert seconds to h:mm:ss format
         function formatTime(seconds) {
@@ -162,7 +215,7 @@
                 // Clear existing data
                 Object.keys(classTimestamps).forEach(key => delete classTimestamps[key]);
                 const classSelector = document.getElementById('classSelector');
-                classSelector.innerHTML = '<option value="">-- Select a class --</option><option value="__all__">All Actions</option>';
+                classSelector.innerHTML = '<option value="">-- Select a class --</option>';
 
                 const lines = text.split('\n').slice(1).map(line => line.trim()).filter(line => line);
                 
@@ -178,7 +231,6 @@
                     classTimestamps[eventClass].push({
                         timeInSeconds: Math.round(parseInt(position, 10) / 1000),
                         confidence: parseFloat(confidence),
-                        eventClass: eventClass,
                         originalLine: line
                     });
                 });
@@ -200,52 +252,112 @@
         function showTimestamps() {
             const selectedClass = document.getElementById('classSelector').value;
             const timestampsContainer = document.getElementById('timestampsContainer');
+            const threshold = parseFloat(document.getElementById('confidenceThreshold').value) / 100;
             
             timestampsContainer.innerHTML = ''; 
 
-            if (selectedClass) {
-                let eventsToShow = [];
-                
-                // If "All Actions" is selected, gather events from all classes
-                if (selectedClass === '__all__') {
-                    Object.keys(classTimestamps).forEach(eventClass => {
-                        classTimestamps[eventClass].forEach(event => {
-                            eventsToShow.push(event);
-                        });
-                    });
-                    
-                    // Sort by time
-                    eventsToShow.sort((a, b) => a.timeInSeconds - b.timeInSeconds);
-                } else if (classTimestamps[selectedClass]) {
-                    // Show only the selected class
-                    eventsToShow = classTimestamps[selectedClass];
-                }
-
-                eventsToShow.forEach((event) => {
+            if (selectedClass && classTimestamps[selectedClass]) {
+                classTimestamps[selectedClass].forEach((event, index) => {
+                    const confidence = event.confidence;
                     const timestamp = event.timeInSeconds;
                     
-                    const timestampDiv = document.createElement('div');
-                    timestampDiv.className = 'timestamp';
-                    
-                    const timeText = document.createElement('span');
-                    timeText.className = 'clickable-time';
-                    timeText.textContent = formatTime(timestamp);
-                    timeText.onclick = () => seekTo(timestamp);
-                    
-                    timestampDiv.appendChild(timeText);
-                    
-                    // If showing all actions, include the event class name
-                    if (selectedClass === '__all__') {
-                        const classText = document.createElement('span');
-                        classText.textContent = `- ${event.eventClass}`;
-                        classText.style.color = '#666';
-                        classText.style.marginLeft = '10px';
-                        timestampDiv.appendChild(classText);
+                    if (confidence >= threshold) {
+                        const timestampDiv = document.createElement('div');
+                        timestampDiv.className = 'timestamp';
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'action-checkbox';
+                        checkbox.dataset.originalLine = event.originalLine;
+                        checkbox.checked = savedActions.includes(event.originalLine);
+                        if (checkbox.checked) {
+                            timestampDiv.style.backgroundColor = '#e0ffe0';
+                        }
+                        checkbox.onchange = handleCheckboxChange;
+
+                        const timeText = document.createElement('span');
+                        timeText.className = 'clickable-time';
+                        timeText.textContent = formatTime(timestamp);
+                        timeText.onclick = () => seekTo(timestamp);
+
+                        const confidenceText = document.createElement('span');
+                        confidenceText.className = 'confidence-indicator';
+                        confidenceText.textContent = `(confidence: ${(confidence * 100).toFixed(1)}%)`;
+                        
+                        timestampDiv.appendChild(checkbox);
+                        timestampDiv.appendChild(timeText);
+                        timestampDiv.appendChild(confidenceText);
+                        
+                        timestampsContainer.appendChild(timestampDiv);
                     }
-                    
-                    timestampsContainer.appendChild(timestampDiv);
                 });
             }
+        }
+
+        function handleCheckboxChange(event) {
+            const checkbox = event.target;
+            const timestampDiv = checkbox.parentElement;
+            const lineToSave = checkbox.dataset.originalLine;
+
+            if (checkbox.checked) {
+                if (!savedActions.includes(lineToSave)) {
+                    savedActions.push(lineToSave);
+                }
+                timestampDiv.style.backgroundColor = '#e0ffe0';
+                console.log("Added. Total saved:", savedActions.length);
+            } else {
+                savedActions = savedActions.filter(line => line !== lineToSave);
+                timestampDiv.style.backgroundColor = 'transparent';
+                console.log("Removed. Total saved:", savedActions.length);
+            }
+        }
+
+        function downloadSavedActions() {
+            if (savedActions.length === 0) {
+                alert("No actions have been saved. Please check some boxes first.");
+                return;
+            }
+
+            const fileContent = savedActions.join('\n');
+            const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            
+            // Generate filename with timestamp
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            a.download = `checked_actions_${timestamp}.txt`;
+            
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            console.log("File download triggered.");
+        }
+
+        function loadFilteredActions() {
+            const fileInput = document.getElementById('loadFilteredFile');
+            fileInput.click();
+        }
+
+        function handleFilteredFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const lines = content.split('\n').map(line => line.trim()).filter(line => line);
+                
+                savedActions = lines;
+                console.log(`Loaded ${savedActions.length} filtered actions`);
+                
+                // Refresh the display to show checkboxes
+                showTimestamps();
+                
+                alert(`Loaded ${savedActions.length} previously filtered actions`);
+            };
+            reader.readAsText(file);
         }
 
         function seekTo(seconds) {
@@ -253,6 +365,16 @@
             video.currentTime = seconds;
             video.play();
         }
+
+        document.getElementById('confidenceThreshold').addEventListener('input', function(e) {
+            const value = (e.target.value / 100).toFixed(2);
+            document.getElementById('confidence-value').textContent = value;
+            showTimestamps();
+        });
+        
+        document.getElementById('downloadButton').addEventListener('click', downloadSavedActions);
+        document.getElementById('loadButton').addEventListener('click', loadFilteredActions);
+        document.getElementById('loadFilteredFile').addEventListener('change', handleFilteredFileLoad);
 
         // Event listener for the video file input
         document.getElementById('videoFile').addEventListener('change', function(event) {
