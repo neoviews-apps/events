@@ -329,6 +329,10 @@
         const playPauseButton = document.getElementById('play-pause-button');
         const videoPlayer = document.getElementById('videoPlayer');
 
+        // Formation lines configuration (always enabled for client view)
+        const showDefensiveLines = true;
+        const showMidfielderLines = true;
+
         // ========== CSV Parsing (Optimized) ==========
         function parseCSV(text) {
             const lines = text.split('\n');
@@ -435,6 +439,11 @@
             document.getElementById('statCurrentFrame').textContent = `Video: ${videoFrame}, CSV: ${csvFrame}`;
             document.getElementById('statPlayersVisible').textContent = currentFrame.length;
 
+            // Helper to find player by jersey number
+            const findPlayer = (jersey) => {
+                return currentFrame.find(p => p.neo_jersey === jersey);
+            };
+
             const dynamicTraces = currentFrame.map(player => {
                 const scaledX = (player.x_bottom_middle + 52.5);
                 const scaledY = (player.y_bottom_middle + 34);
@@ -462,7 +471,58 @@
                 };
             });
 
-            Plotly.react("pitch", [...soccerPitchTraces, ...dynamicTraces], layout);
+            // Add formation lines
+            const formationLines = [];
+
+            // Defensive lines (solid lines)
+            if (showDefensiveLines) {
+                const defensiveEdges = [
+                    ["7", "3"],
+                    ["3", "30"],
+                    ["30", "8"]
+                ];
+
+                defensiveEdges.forEach(([jersey1, jersey2]) => {
+                    const p1 = findPlayer(jersey1);
+                    const p2 = findPlayer(jersey2);
+                    if (p1 && p2) {
+                        formationLines.push({
+                            x: [p1.x_bottom_middle + 52.5, p2.x_bottom_middle + 52.5],
+                            y: [p1.y_bottom_middle + 34, p2.y_bottom_middle + 34],
+                            mode: "lines",
+                            line: { color: "red", width: 2 },
+                            showlegend: false,
+                            hoverinfo: "skip"
+                        });
+                    }
+                });
+            }
+
+            // Midfield lines (dashed lines)
+            if (showMidfielderLines) {
+                const midfieldEdges = [
+                    ["99", "10"],
+                    ["10", "61"],
+                    ["61", "23"]
+                ];
+
+                midfieldEdges.forEach(([jersey1, jersey2]) => {
+                    const p1 = findPlayer(jersey1);
+                    const p2 = findPlayer(jersey2);
+                    if (p1 && p2) {
+                        formationLines.push({
+                            x: [p1.x_bottom_middle + 52.5, p2.x_bottom_middle + 52.5],
+                            y: [p1.y_bottom_middle + 34, p2.y_bottom_middle + 34],
+                            mode: "lines",
+                            line: { color: "yellow", width: 2, dash: "dash" },
+                            showlegend: false,
+                            hoverinfo: "skip"
+                        });
+                    }
+                });
+            }
+
+            Plotly.react("pitch", [...soccerPitchTraces, ...formationLines, ...dynamicTraces], layout);
         }
 
         function handleMarkerClick(data) {

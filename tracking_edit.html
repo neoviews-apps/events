@@ -36,7 +36,8 @@
             padding: 0;
             display: flex;
             flex-direction: column;
-            width: 1000px;
+            flex: 1;
+            max-width: 1000px;
             box-sizing: border-box;
             gap: 5px;
             align-items: center;
@@ -51,6 +52,34 @@
             flex-direction: column;
             gap: 20px;
             justify-content: flex-start;
+        }
+
+        @media screen and (max-width: 1400px) {
+            .left-stack {
+                max-width: 800px;
+            }
+        }
+
+        @media screen and (max-width: 1200px) {
+            .left-stack {
+                max-width: 600px;
+            }
+        }
+
+        @media screen and (max-width: 900px) {
+            .main-flex-row {
+                flex-direction: column;
+            }
+
+            .left-stack {
+                max-width: 100%;
+                width: 100%;
+            }
+
+            .right-controls {
+                width: 100%;
+                max-width: 100%;
+            }
         }
 
         .main-flex-row>.container {
@@ -244,6 +273,18 @@
                     <small style="color: #666;">First image_id in CSV to align with video</small>
                 </div>
                 <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="show_def_lines" checked>
+                        Show Defensive Lines
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="show_mid_lines" checked>
+                        Show Midfield Lines
+                    </label>
+                </div>
+                <div class="form-group">
                     <button onclick="loadFiles()">Load Files</button>
                 </div>
                 <div id="loading-status" class="loading hidden">Loading data...</div>
@@ -349,6 +390,10 @@
         const progressBar = document.getElementById('progress-bar');
         const playPauseButton = document.getElementById('play-pause-button');
         const videoPlayer = document.getElementById('videoPlayer');
+
+        // Formation lines configuration
+        let showDefensiveLines = true;
+        let showMidfielderLines = true;
 
         // ========== CSV Parsing (Optimized) ==========
         function parseCSV(text) {
@@ -456,6 +501,11 @@
             document.getElementById('statCurrentFrame').textContent = `Video: ${videoFrame}, CSV: ${csvFrame}`;
             document.getElementById('statPlayersVisible').textContent = currentFrame.length;
 
+            // Helper to find player by jersey number
+            const findPlayer = (jersey) => {
+                return currentFrame.find(p => p.neo_jersey === jersey);
+            };
+
             const dynamicTraces = currentFrame.map(player => {
                 const scaledX = (player.x_bottom_middle + 52.5);
                 const scaledY = (player.y_bottom_middle + 34);
@@ -483,7 +533,58 @@
                 };
             });
 
-            Plotly.react("pitch", [...soccerPitchTraces, ...dynamicTraces], layout);
+            // Add formation lines
+            const formationLines = [];
+
+            // Defensive lines (solid lines)
+            if (showDefensiveLines) {
+                const defensiveEdges = [
+                    ["7", "3"],
+                    ["3", "30"],
+                    ["30", "8"]
+                ];
+
+                defensiveEdges.forEach(([jersey1, jersey2]) => {
+                    const p1 = findPlayer(jersey1);
+                    const p2 = findPlayer(jersey2);
+                    if (p1 && p2) {
+                        formationLines.push({
+                            x: [p1.x_bottom_middle + 52.5, p2.x_bottom_middle + 52.5],
+                            y: [p1.y_bottom_middle + 34, p2.y_bottom_middle + 34],
+                            mode: "lines",
+                            line: { color: "red", width: 2 },
+                            showlegend: false,
+                            hoverinfo: "skip"
+                        });
+                    }
+                });
+            }
+
+            // Midfield lines (dashed lines)
+            if (showMidfielderLines) {
+                const midfieldEdges = [
+                    ["99", "10"],
+                    ["10", "61"],
+                    ["61", "23"]
+                ];
+
+                midfieldEdges.forEach(([jersey1, jersey2]) => {
+                    const p1 = findPlayer(jersey1);
+                    const p2 = findPlayer(jersey2);
+                    if (p1 && p2) {
+                        formationLines.push({
+                            x: [p1.x_bottom_middle + 52.5, p2.x_bottom_middle + 52.5],
+                            y: [p1.y_bottom_middle + 34, p2.y_bottom_middle + 34],
+                            mode: "lines",
+                            line: { color: "yellow", width: 2, dash: "dash" },
+                            showlegend: false,
+                            hoverinfo: "skip"
+                        });
+                    }
+                });
+            }
+
+            Plotly.react("pitch", [...soccerPitchTraces, ...formationLines, ...dynamicTraces], layout);
         }
 
         function handleMarkerClick(data) {
@@ -534,8 +635,10 @@ Frame: ${player.image_id}`;
             csvFPS = parseFloat(document.getElementById('csv_fps').value) || 25;
             videoStartFrame = parseInt(document.getElementById('video_start_frame').value) || 0;
             csvStartFrame = parseInt(document.getElementById('csv_start_frame').value) || 0;
+            showDefensiveLines = document.getElementById('show_def_lines').checked;
+            showMidfielderLines = document.getElementById('show_mid_lines').checked;
 
-            console.log('Configuration:', { videoFPS, csvFPS, videoStartFrame, csvStartFrame });
+            console.log('Configuration:', { videoFPS, csvFPS, videoStartFrame, csvStartFrame, showDefensiveLines, showMidfielderLines });
 
             const loadingStatus = document.getElementById('loading-status');
             loadingStatus.classList.remove('hidden');
