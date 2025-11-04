@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soccer Tracking Viewer - Client View</title>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.23.0/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: none;
+            width: 100%;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .main-flex-row {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .left-stack {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            width: 1000px;
+            box-sizing: border-box;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .right-controls {
+            width: 30%;
+            min-width: 320px;
+            max-width: 400px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            justify-content: flex-start;
+        }
+
+        .main-flex-row>.container {
+            flex: 1 1 0;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+
+        h1,
+        h2 {
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+        }
+
+        #videoPlayer {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .pitch-container {
+            width: 100%;
+        }
+
+        #pitch {
+            width: 100%;
+            min-height: 500px;
+            margin: 0;
+            padding: 0;
+        }
+
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        video {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .input-form {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .input-form h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input[type="file"],
+        .form-group input[type="text"],
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .form-group button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .form-group button:hover {
+            background-color: #45a049;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            color: #d9534f;
+            padding: 10px;
+            background-color: #f9f2f2;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .field-label {
+            display: block;
+            color: #888;
+            font-weight: bold;
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+
+        .field-value {
+            display: block;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        #progress-bar {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        #play-pause-button {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        .stats {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .stats div {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-flex-row">
+        <div class="container left-stack">
+            <!-- Input form -->
+            <div class="input-form" id="input-form">
+                <h2>Load Video and Tracking Data</h2>
+                <div class="form-group">
+                    <label for="video_file">Video File:</label>
+                    <input id="video_file" type="file" accept="video/*">
+                </div>
+                <div class="form-group">
+                    <label for="csv_file">Tracking Data (CSV):</label>
+                    <input id="csv_file" type="file" accept=".csv">
+                    <small style="color: #666;">CSV file containing tracking data</small>
+                </div>
+                <div class="form-group">
+                    <button onclick="loadFiles()">Load Files</button>
+                </div>
+                <div id="loading-status" class="loading hidden">Loading data...</div>
+            </div>
+
+            <!-- Video player and pitch -->
+            <div id="videoContent" class="hidden">
+                <div class="video-container">
+                    <video id="videoPlayer" controls>
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                <div class="pitch-container">
+                    <div id="pitch"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container right-controls">
+            <input id="progress-bar" type="range" min="0" max="100" value="0" step="1">
+            <button id="play-pause-button">Pause</button>
+
+            <div class="stats" id="stats">
+                <div><strong>Statistics</strong></div>
+                <div>Total Frames: <span id="statFrames">-</span></div>
+                <div>Total Detections: <span id="statDetections">-</span></div>
+                <div>Current Frame: <span id="statCurrentFrame">-</span></div>
+                <div>Players Visible: <span id="statPlayersVisible">-</span></div>
+            </div>
+            <div id="predictionObject">
+                <h2>Player Details</h2>
+                <pre id="right-panel">Click a player marker to see details here.</pre>
+            </div>
+            <div>
+                <span class="field-label">Video:</span> <span class="field-value" id="videoInfo">Not loaded</span>
+                <span class="field-label">Tracking Data:</span> <span class="field-value" id="csvInfo">Not loaded</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ========== Soccer Pitch Drawing ==========
+        const soccerPitchTraces = [
+            { x: [0, 0, 105, 105, 0], y: [0, 68, 68, 0, 0], mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: [0, 0, 16.5, 16.5, 0], y: [13.84, 68 - 13.84, 68 - 13.84, 13.84, 13.84], mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: [105, 105, 105 - 16.5, 105 - 16.5, 105], y: [13.84, 68 - 13.84, 68 - 13.84, 13.84, 13.84], mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: [0, 0, 5.5, 5.5, 0], y: [24.84, 68 - 24.84, 68 - 24.84, 24.84, 24.84], mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: [105, 105, 105 - 5.5, 105 - 5.5, 105], y: [24.84, 68 - 24.84, 68 - 24.84, 24.84, 24.84], mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: Array.from({ length: 361 }, (_, i) => 52.5 + 9.15 * Math.cos((i * Math.PI) / 180)), y: Array.from({ length: 361 }, (_, i) => 34 + 9.15 * Math.sin((i * Math.PI) / 180)), mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: [52.5, 52.5], y: [0, 68], mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: [11, 105 - 11], y: [34, 34], mode: "markers", marker: { size: 5, color: "white" }, type: "scatter" },
+            { x: [52.5], y: [34], mode: "markers", marker: { size: 5, color: "white" }, type: "scatter" },
+            { x: Array.from({ length: 91 }, (_, i) => 11 + 9.15 * Math.cos(((-45 + i) * Math.PI) / 180)), y: Array.from({ length: 91 }, (_, i) => 34 + 9.15 * Math.sin(((-45 + i) * Math.PI) / 180)), mode: "lines", line: { color: "white" }, type: "scatter" },
+            { x: Array.from({ length: 91 }, (_, i) => 105 - 11 + 9.15 * Math.cos(((135 + i) * Math.PI) / 180)), y: Array.from({ length: 91 }, (_, i) => 34 + 9.15 * Math.sin(((135 + i) * Math.PI) / 180)), mode: "lines", line: { color: "white" }, type: "scatter" }
+        ];
+
+        // ========== Global Variables ==========
+        let frameMap = new Map(); // Map of frame_id -> array of players
+        let frameNumbers = [];
+        let layout = {};
+        let isPlaying = true;
+        let lastFrameIndex = -1;
+        let numFrames = 0;
+        let totalDetections = 0;
+        let latestFramePlayers = [];
+        
+        // Fixed frame alignment and FPS settings
+        const videoFPS = 29.97;
+        const csvFPS = 10;
+        const videoStartFrame = 60956;
+        const csvStartFrame = 1280;
+
+        const progressBar = document.getElementById('progress-bar');
+        const playPauseButton = document.getElementById('play-pause-button');
+        const videoPlayer = document.getElementById('videoPlayer');
+
+        // ========== CSV Parsing (Optimized) ==========
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            
+            // Find column indices
+            const colIdx = {};
+            headers.forEach((header, idx) => {
+                colIdx[header] = idx;
+            });
+
+            // Parse data rows
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const values = line.split(',');
+                if (values.length < headers.length) continue;
+
+                const row = {
+                    image_id: parseInt(values[colIdx.image_id]),
+                    track_id: parseInt(values[colIdx.track_id]),
+                    x_bottom_middle: parseFloat(values[colIdx.x_bottom_middle]),
+                    y_bottom_middle: parseFloat(values[colIdx.y_bottom_middle]),
+                    team_side: parseInt(values[colIdx.team_side]),
+                    pos_role: values[colIdx.pos_role] || '',
+                    neo_jersey: values[colIdx.neo_jersey] || ''
+                };
+
+                data.push(row);
+            }
+
+            return data;
+        }
+
+        // ========== Frame Conversion Functions ==========
+        function videoFrameToCSVFrame(videoFrame) {
+            // Convert video frame to CSV frame considering FPS difference and start offsets
+            // Formula: (videoFrame - videoStartFrame) * (csvFPS / videoFPS) + csvStartFrame
+            const relativeVideoFrame = videoFrame - videoStartFrame;
+            const csvFrame = Math.round(relativeVideoFrame * (csvFPS / videoFPS)) + csvStartFrame;
+            return csvFrame;
+        }
+
+        function csvFrameToVideoFrame(csvFrame) {
+            // Convert CSV frame to video frame
+            // Formula: (csvFrame - csvStartFrame) * (videoFPS / csvFPS) + videoStartFrame
+            const relativeCSVFrame = csvFrame - csvStartFrame;
+            const videoFrame = Math.round(relativeCSVFrame * (videoFPS / csvFPS)) + videoStartFrame;
+            return videoFrame;
+        }
+
+        function getCurrentVideoFrame() {
+            return Math.floor(videoPlayer.currentTime * videoFPS);
+        }
+
+        function setVideoFrame(frameNumber) {
+            videoPlayer.currentTime = frameNumber / videoFPS;
+        }
+
+        // ========== Setup Functions ==========
+        function setupPitch() {
+            const layout = {
+                xaxis: { 
+                    range: [-5, 110],  // Extended range to prevent clipping (105m + padding)
+                    showgrid: false, 
+                    zeroline: false,
+                    scaleanchor: "y",  // Lock aspect ratio to y-axis
+                    scaleratio: 1      // 1:1 ratio (meters)
+                },
+                yaxis: { 
+                    range: [-5, 73],   // Extended range to prevent clipping (68m + padding)
+                    showgrid: false, 
+                    zeroline: false 
+                },
+                paper_bgcolor: "green",
+                plot_bgcolor: "green",
+                showlegend: false,
+                margin: { l: 60, r: 60, t: 60, b: 60 },  // Increased margins for labels
+                autosize: true,
+                width: null,
+                height: null
+            };
+            Plotly.newPlot("pitch", soccerPitchTraces, layout, {responsive: true});
+
+            const pitchDiv = document.getElementById("pitch");
+            if (pitchDiv) {
+                pitchDiv.on('plotly_click', function (data) {
+                    handleMarkerClick(data);
+                });
+            }
+
+            return layout;
+        }
+
+        function animateFrame(videoFrame) {
+            // Convert video frame to CSV frame
+            const csvFrame = videoFrameToCSVFrame(videoFrame);
+            const currentFrame = frameMap.get(csvFrame) || [];
+            latestFramePlayers = currentFrame;
+
+            // Update stats
+            document.getElementById('statCurrentFrame').textContent = `Video: ${videoFrame}, CSV: ${csvFrame}`;
+            document.getElementById('statPlayersVisible').textContent = currentFrame.length;
+
+            const dynamicTraces = currentFrame.map(player => {
+                const scaledX = (player.x_bottom_middle + 52.5);
+                const scaledY = (player.y_bottom_middle + 34);
+
+                let color = "white";
+                if (player.team_side === 1) {
+                    color = "blue";
+                } else if (player.team_side === 2) {
+                    color = "orange";
+                }
+
+                const label = player.neo_jersey ? `[${player.neo_jersey}]` : `T${player.track_id}`;
+                const text = player.pos_role ? `${label} ${player.pos_role}` : label;
+
+                return {
+                    x: [scaledX],
+                    y: [scaledY],
+                    mode: "markers+text",
+                    marker: { size: 9, color: color },
+                    name: `p${player.track_id}`,
+                    hovertemplate: `Track ${player.track_id}<br>Team ${player.team_side}<br>Position: ${player.pos_role}<br>%{x:.1f}, %{y:.1f}<extra></extra>`,
+                    customdata: [player],
+                    text: [text],
+                    textposition: "top center"
+                };
+            });
+
+            Plotly.react("pitch", [...soccerPitchTraces, ...dynamicTraces], layout);
+        }
+
+        function handleMarkerClick(data) {
+            if (!data || !data.points || data.points.length === 0) return;
+            const pt = data.points[0];
+            const player = pt.customdata;
+
+            if (!player) return;
+
+            const panel = document.getElementById("right-panel");
+            if (panel) {
+                panel.textContent = `Track ID: ${player.track_id}
+Team: ${player.team_side}
+Position: ${player.pos_role || 'N/A'}
+Jersey: ${player.neo_jersey || 'N/A'}
+Pitch X: ${player.x_bottom_middle.toFixed(2)}
+Pitch Y: ${player.y_bottom_middle.toFixed(2)}
+Frame: ${player.image_id}`;
+            }
+        }
+
+        function syncFrameWithVideo() {
+            const videoFrame = getCurrentVideoFrame();
+            if (videoFrame !== lastFrameIndex) {
+                animateFrame(videoFrame);
+                lastFrameIndex = videoFrame;
+                progressBar.value = videoFrame;
+            }
+
+            if (!videoPlayer.paused && !videoPlayer.ended) {
+                requestAnimationFrame(syncFrameWithVideo);
+            }
+        }
+
+        // ========== File Loading ==========
+        window.loadFiles = async function () {
+            const videoFile = document.getElementById('video_file').files[0];
+            const csvFile = document.getElementById('csv_file').files[0];
+
+            if (!videoFile || !csvFile) {
+                alert('Please select both a video file and a CSV file');
+                return;
+            }
+
+            console.log('Fixed Configuration:', { videoFPS, csvFPS, videoStartFrame, csvStartFrame });
+
+            const loadingStatus = document.getElementById('loading-status');
+            loadingStatus.classList.remove('hidden');
+
+            try {
+                // Load video
+                const videoURL = URL.createObjectURL(videoFile);
+                videoPlayer.src = videoURL;
+                document.getElementById('videoInfo').textContent = videoFile.name;
+
+                // Load and parse CSV
+                loadingStatus.textContent = 'Loading CSV data...';
+                const csvText = await csvFile.text();
+                
+                loadingStatus.textContent = 'Parsing CSV data...';
+                const data = parseCSV(csvText);
+                totalDetections = data.length;
+
+                if (!data || data.length === 0) {
+                    alert("No data available in CSV file");
+                    return;
+                }
+
+                // Build frame map for fast lookups
+                loadingStatus.textContent = 'Building frame index...';
+                frameMap.clear();
+                data.forEach(row => {
+                    if (!frameMap.has(row.image_id)) {
+                        frameMap.set(row.image_id, []);
+                    }
+                    frameMap.get(row.image_id).push(row);
+                });
+
+                frameNumbers = Array.from(frameMap.keys()).sort((a, b) => a - b);
+                
+                // Calculate max video frame based on last CSV frame
+                const lastCSVFrame = frameNumbers[frameNumbers.length - 1];
+                const maxVideoFrame = csvFrameToVideoFrame(lastCSVFrame);
+                progressBar.max = maxVideoFrame;
+
+                // Update stats
+                document.getElementById('statFrames').textContent = `CSV: ${frameNumbers.length.toLocaleString()}, Video: ${maxVideoFrame.toLocaleString()}`;
+                document.getElementById('statDetections').textContent = totalDetections.toLocaleString();
+                document.getElementById('statCurrentFrame').textContent = 'Video: 0, CSV: 0';
+                document.getElementById('statPlayersVisible').textContent = '0';
+
+                layout = setupPitch();
+
+                // Show video content
+                document.getElementById('input-form').classList.add('hidden');
+                document.getElementById('videoContent').classList.remove('hidden');
+                document.getElementById('csvInfo').textContent = `${csvFile.name} (${(csvFile.size / 1024 / 1024).toFixed(2)} MB)`;
+
+                playPauseButton.addEventListener('click', () => {
+                    isPlaying = !isPlaying;
+                    playPauseButton.textContent = isPlaying ? "Pause" : "Play";
+                    if (isPlaying) videoPlayer.play();
+                    else videoPlayer.pause();
+                }, { once: true });
+
+                loadingStatus.textContent = 'Ready!';
+                setTimeout(() => loadingStatus.classList.add('hidden'), 1000);
+
+            } catch (err) {
+                console.error('Error:', err);
+                alert("Error loading files: " + err.message);
+                loadingStatus.classList.add('hidden');
+            }
+        };
+
+        // ========== Event Listeners ==========
+        videoPlayer.addEventListener('seeked', () => {
+            lastFrameIndex = -1;
+            requestAnimationFrame(syncFrameWithVideo);
+        });
+
+        videoPlayer.addEventListener('play', () => {
+            requestAnimationFrame(syncFrameWithVideo);
+        });
+
+        progressBar.addEventListener('input', () => {
+            const videoFrame = parseInt(progressBar.value, 10);
+            videoPlayer.pause();
+            isPlaying = false;
+            playPauseButton.textContent = "Play";
+            setVideoFrame(videoFrame);
+            videoPlayer.play();
+            setTimeout(() => videoPlayer.pause(), 30);
+            animateFrame(videoFrame);
+            lastFrameIndex = videoFrame;
+        });
+
+        videoPlayer.addEventListener('timeupdate', () => {
+            if (!videoPlayer.paused && !videoPlayer.ended) {
+                progressBar.value = getCurrentVideoFrame();
+            }
+        });
+    </script>
+</body>
+
+</html>
