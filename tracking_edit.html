@@ -44,9 +44,9 @@
         }
 
         .right-controls {
-            width: 30%;
-            min-width: 320px;
-            max-width: 400px;
+            width: 35%;
+            min-width: 400px;
+            max-width: 600px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -54,9 +54,21 @@
             justify-content: flex-start;
         }
 
-        @media screen and (max-width: 1400px) {
+        @media screen and (max-width: 1600px) {
             .left-stack {
                 max-width: 800px;
+            }
+            .right-controls {
+                max-width: 500px;
+            }
+        }
+
+        @media screen and (max-width: 1400px) {
+            .left-stack {
+                max-width: 700px;
+            }
+            .right-controls {
+                max-width: 450px;
             }
         }
 
@@ -64,9 +76,12 @@
             .left-stack {
                 max-width: 600px;
             }
+            .right-controls {
+                max-width: 400px;
+            }
         }
 
-        @media screen and (max-width: 900px) {
+        @media screen and (max-width: 1000px) {
             .main-flex-row {
                 flex-direction: column;
             }
@@ -234,6 +249,77 @@
         .stats div {
             margin: 5px 0;
         }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background-color: #fff;
+            margin-top: 10px;
+        }
+
+        .stats-table th,
+        .stats-table td {
+            padding: 6px 4px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        .stats-table th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+
+        .stats-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .stats-table tr:hover {
+            background-color: #e8f5e9;
+        }
+
+        .stats-table td:first-child {
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .stats-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .player-detail-stats {
+            background-color: #f0f8ff;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .player-detail-stats .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .player-detail-stats .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .player-detail-stats .stat-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .player-detail-stats .stat-value {
+            color: #333;
+        }
     </style>
 </head>
 
@@ -338,15 +424,44 @@
             </div>
 
             <div class="stats" id="stats">
-                <div><strong>Statistics</strong></div>
+                <div><strong>Frame Info</strong></div>
                 <div>Total Frames: <span id="statFrames">-</span></div>
                 <div>Total Detections: <span id="statDetections">-</span></div>
                 <div>Current Frame: <span id="statCurrentFrame">-</span></div>
                 <div>Players Visible: <span id="statPlayersVisible">-</span></div>
             </div>
+
+            <div>
+                <h3 style="margin-bottom: 5px;">Player Statistics</h3>
+                <div class="stats-container">
+                    <table class="stats-table" id="statsTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Total (m)</th>
+                                <th>Walk</th>
+                                <th>Jog</th>
+                                <th>Run</th>
+                                <th>Sprint</th>
+                                <th>N_Spr</th>
+                                <th>HR</th>
+                                <th>Spd (m/s)</th>
+                                <th>Acc (m/s²)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statsTableBody">
+                            <tr>
+                                <td colspan="10" style="text-align: center; color: #999;">No data</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="predictionObject">
-                <h2>Player Details</h2>
+                <h3>Player Details</h3>
                 <pre id="right-panel">Click a player marker to see details here.</pre>
+                <div id="player-detail-stats" class="player-detail-stats hidden"></div>
             </div>
             <div>
                 <span class="field-label">Video:</span> <span class="field-value" id="videoInfo">Not loaded</span>
@@ -422,7 +537,17 @@
                     y_bottom_middle: parseFloat(values[colIdx.y_bottom_middle]),
                     team_side: parseInt(values[colIdx.team_side]),
                     pos_role: values[colIdx.pos_role] || '',
-                    neo_jersey: values[colIdx.neo_jersey] || ''
+                    neo_jersey: values[colIdx.neo_jersey] || '',
+                    // Statistics
+                    total_distance: colIdx.total_distance !== undefined ? parseFloat(values[colIdx.total_distance]) : 0,
+                    walk_distance: colIdx.walk_distance !== undefined ? parseFloat(values[colIdx.walk_distance]) : 0,
+                    jog_distance: colIdx.jog_distance !== undefined ? parseFloat(values[colIdx.jog_distance]) : 0,
+                    run_distance: colIdx.run_distance !== undefined ? parseFloat(values[colIdx.run_distance]) : 0,
+                    sprint_distance: colIdx.sprint_distance !== undefined ? parseFloat(values[colIdx.sprint_distance]) : 0,
+                    sprint_count: colIdx.sprint_count !== undefined ? parseInt(values[colIdx.sprint_count]) : 0,
+                    current_speed: colIdx.current_speed !== undefined ? parseFloat(values[colIdx.current_speed]) : 0,
+                    current_accel: colIdx.current_accel !== undefined ? parseFloat(values[colIdx.current_accel]) : 0,
+                    heart_rate: colIdx.heart_rate !== undefined ? parseFloat(values[colIdx.heart_rate]) : 0
                 };
 
                 data.push(row);
@@ -585,6 +710,44 @@
             }
 
             Plotly.react("pitch", [...soccerPitchTraces, ...formationLines, ...dynamicTraces], layout);
+            
+            // Update stats table
+            updateStatsTable(currentFrame);
+        }
+
+        function updateStatsTable(players) {
+            const tbody = document.getElementById('statsTableBody');
+            if (!tbody || players.length === 0) {
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #999;">No players visible</td></tr>';
+                }
+                return;
+            }
+
+            // Sort players by jersey number
+            const sortedPlayers = [...players].sort((a, b) => {
+                const jerseyA = a.neo_jersey || '';
+                const jerseyB = b.neo_jersey || '';
+                return jerseyA.localeCompare(jerseyB, undefined, { numeric: true });
+            });
+
+            tbody.innerHTML = sortedPlayers.map(player => {
+                const hr = player.heart_rate > 0 ? player.heart_rate.toFixed(0) : '-';
+                return `
+                    <tr>
+                        <td>${player.neo_jersey || player.track_id}</td>
+                        <td>${player.total_distance.toFixed(0)}</td>
+                        <td>${player.walk_distance.toFixed(0)}</td>
+                        <td>${player.jog_distance.toFixed(0)}</td>
+                        <td>${player.run_distance.toFixed(0)}</td>
+                        <td>${player.sprint_distance.toFixed(0)}</td>
+                        <td>${player.sprint_count}</td>
+                        <td>${hr}</td>
+                        <td>${player.current_speed.toFixed(1)}</td>
+                        <td>${player.current_accel.toFixed(1)}</td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         function handleMarkerClick(data) {
@@ -595,6 +758,8 @@
             if (!player) return;
 
             const panel = document.getElementById("right-panel");
+            const detailStats = document.getElementById("player-detail-stats");
+            
             if (panel) {
                 panel.textContent = `Track ID: ${player.track_id}
 Team: ${player.team_side}
@@ -603,6 +768,52 @@ Jersey: ${player.neo_jersey || 'N/A'}
 Pitch X: ${player.x_bottom_middle.toFixed(2)}
 Pitch Y: ${player.y_bottom_middle.toFixed(2)}
 Frame: ${player.image_id}`;
+            }
+
+            // Show detailed statistics
+            if (detailStats) {
+                detailStats.classList.remove('hidden');
+                detailStats.innerHTML = `
+                    <div style="text-align: center; font-weight: bold; margin-bottom: 8px; color: #4CAF50;">
+                        Player #${player.neo_jersey} Statistics
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Total Distance:</span>
+                        <span class="stat-value">${player.total_distance.toFixed(1)} m (${(player.total_distance / 1000).toFixed(2)} km)</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Walking:</span>
+                        <span class="stat-value">${player.walk_distance.toFixed(1)} m</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Jogging:</span>
+                        <span class="stat-value">${player.jog_distance.toFixed(1)} m</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Running:</span>
+                        <span class="stat-value">${player.run_distance.toFixed(1)} m</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Sprinting:</span>
+                        <span class="stat-value">${player.sprint_distance.toFixed(1)} m</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Sprint Count:</span>
+                        <span class="stat-value">${player.sprint_count}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Current Speed:</span>
+                        <span class="stat-value">${player.current_speed.toFixed(2)} m/s (${(player.current_speed * 3.6).toFixed(1)} km/h)</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Current Accel:</span>
+                        <span class="stat-value">${player.current_accel.toFixed(2)} m/s²</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Heart Rate:</span>
+                        <span class="stat-value">${player.heart_rate > 0 ? player.heart_rate.toFixed(0) + ' bpm' : 'N/A'}</span>
+                    </div>
+                `;
             }
         }
 
